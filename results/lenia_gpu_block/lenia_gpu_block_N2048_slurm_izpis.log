@@ -1,0 +1,23 @@
+rm -f lenia.o gifenc.o main.o orbium.o lenia.out
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o lenia.o src/lenia.cu
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o gifenc.o src/gifenc.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o main.o src/main.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall lenia.o gifenc.o main.o orbium.o -o lenia.out -lm
+Začenjam meritve z 1 nitmi...
+Testiram mrežo: 2048x2048
+  Zagon 1/5
+    --> Čas:     0.534 s
+  Zagon 2/5
+    --> Čas:     0.479 s
+  Zagon 3/5
+    --> Čas:     0.477 s
+  Zagon 4/5
+    --> Čas:     0.479 s
+  Zagon 5/5
+    --> Čas:     0.478 s
+  -------------------------------------------------
+  Povprečje za N=2048 =  0.489400 s
+  -------------------------------------------------
+
+Meritve za N=2048 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu_block/'.
