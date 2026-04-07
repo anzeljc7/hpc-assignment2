@@ -1,0 +1,3 @@
+make: 'lenia.out' is up to date.
+Uporaba: /d/hpc/home/ta3667/hpc-assignment2/./lenia.out <velikost_N>
+srun: error: wn201: task 0: Exited with exit code 1

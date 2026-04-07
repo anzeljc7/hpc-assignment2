@@ -1,0 +1,60 @@
+rm -f lenia.o gifenc.o main.o orbium.o lenia.out
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o lenia.o src/lenia.cu
+    --> Čas:     4.963 s
+  Zagon 5/5
+    Napaka: časa nisem našel v izpisu za N=1024.
+      [2026-04-07T10:26:57.199] error: execve(): /d/hpc/home/ta3667/hpc-assignment2/./lenia.out: No such file or directory
+      srun: error: wn102: task 0: Exited with exit code 2
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o gifenc.o src/gifenc.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o main.o src/main.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall lenia.o gifenc.o main.o orbium.o -o lenia.out -lm
+Začenjam meritve z 64 nitmi...
+Testiram mrežo: 256x256
+  Zagon 1/5
+    --> Čas:     0.316 s
+  Zagon 2/5
+    --> Čas:     0.370 s
+  Zagon 3/5
+    --> Čas:     0.315 s
+  Zagon 4/5
+    --> Čas:     0.315 s
+  Zagon 5/5
+    --> Čas:     0.316 s
+  -------------------------------------------------
+  Povprečje za N=256  =  0.326400 s
+  -------------------------------------------------
+
+Testiram mrežo: 512x512
+  Zagon 1/5
+    --> Čas:     1.241 s
+  Zagon 2/5
+    --> Čas:     1.241 s
+  Zagon 3/5
+    --> Čas:     1.240 s
+  Zagon 4/5
+    --> Čas:     1.241 s
+  Zagon 5/5
+    --> Čas:     1.245 s
+  -------------------------------------------------
+  Povprečje za N=512  =  1.241600 s
+  -------------------------------------------------
+
+Testiram mrežo: 1024x1024
+  Zagon 1/5
+    --> Čas:     5.174 s
+  Zagon 2/5
+    --> Čas:     4.974 s
+  Zagon 3/5
+    --> Čas:     4.944 s
+  Zagon 4/5
+    --> Čas:     4.950 s
+  Zagon 5/5
+    --> Čas:     4.946 s
+  -------------------------------------------------
+  Povprečje za N=1024 =  4.997600 s
+  -------------------------------------------------
+
+Testiram mrežo: 2048x2048
+  Zagon 1/5
+[2026-04-07T10:27:39.937] error: *** JOB 65928077 ON wn101 CANCELLED AT 2026-04-07T10:27:39 DUE to SIGNAL Terminated ***

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-// #include "lenia.h" - ker je samo popravljena koda se ne upošteva v headerju zaenkrat
+#include "lenia.h"
 #include "orbium.h"
 #include "gifenc.h"
 
@@ -71,7 +71,8 @@ inline double *convolve2d(double *result, const double *input, const double *w, 
 {
     if (result != NULL && input != NULL && w != NULL)
     {
-#pragma omp parallel for schedule(static, 4)
+// OpenMP paralelizacija - razdelitev po vrsticah s pasovi rows / 64 (threads)
+#pragma omp parallel for // schedule(static, 4) - itak že razdeli na kose
         for (unsigned int i = 0; i < rows; i++)
         {
             for (unsigned int j = 0; j < cols; j++)
@@ -127,9 +128,9 @@ double *evolve_lenia(const unsigned int rows, const unsigned int cols, const uns
         tmp = convolve2d(tmp, world, w, rows, cols, kernel_size, kernel_size);
 
         // Evolution
-        // OpenMP paralelizacija - razdelitev po vrsticah s pasovi (chunks) velikosti 2.
-        // Število niti se prebere iz okoljske spremenljivke OMP_NUM_THREADS.
-#pragma omp parallel for schedule(static, 2)
+        // OpenMP paralelizacija - razdelitev po vrsticah s pasovi rows
+
+#pragma omp parallel for // schedule(static, 4) - to niti ne rabimo, saj razdeli na kose
         for (unsigned int i = 0; i < rows; i++)
         {
             for (unsigned int j = 0; j < cols; j++)
