@@ -1,3 +1,24 @@
-make: 'lenia.out' is up to date.
-Uporaba: /d/hpc/home/ta3667/hpc-assignment2/./lenia.out <velikost_N>
-srun: error: wn201: task 0: Exited with exit code 1
+rm -f lenia.o gifenc.o main.o orbium.o lenia.out
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o lenia.o src/lenia.cu
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o gifenc.o src/gifenc.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o main.o src/main.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
+nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall lenia.o gifenc.o main.o orbium.o -o lenia.out -lm
+Začenjam meritve z 1 nitmi...
+Testiram mrežo: 256x256
+  Zagon 1/5
+    --> Čas:     0.248 s
+  Zagon 2/5
+    --> Čas:     0.214 s
+  Zagon 3/5
+    --> Čas:     0.217 s
+  Zagon 4/5
+    --> Čas:     0.212 s
+  Zagon 5/5
+    --> Čas:     0.256 s
+  -------------------------------------------------
+  Povprečje za N=256  =  0.229400 s
+  -------------------------------------------------
+
+Meritve za N=256 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu/'.
+mv: cannot stat 'slurm_temp_65933096.log': No such file or directory
