@@ -4,20 +4,13 @@ nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompi
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o main.o src/main.c
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall lenia.o gifenc.o main.o orbium.o -o lenia.out -lm
-Začenjam meritve z 1 nitmi...
-Testiram mrežo: 2048x2048
+/usr/bin/ld: main.o: in function `main':
+main.c:(.text.startup+0x81): undefined reference to `evolve_lenia'
+collect2: error: ld returned 1 exit status
+make: *** [Makefile:26: lenia.out] Error 1
+Začenjam meritve z 64 nitmi...
+Testiram mrežo: 256x256
   Zagon 1/5
-    --> Čas:     0.568 s
-  Zagon 2/5
-    --> Čas:     0.484 s
-  Zagon 3/5
-    --> Čas:     0.487 s
-  Zagon 4/5
-    --> Čas:     0.482 s
-  Zagon 5/5
-    --> Čas:     0.490 s
-  -------------------------------------------------
-  Povprečje za N=2048 =  0.502200 s
-  -------------------------------------------------
-
-Meritve za N=2048 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu_square/'.
+    Napaka: časa nisem našel v izpisu za N=256.
+      [2026-04-12T15:21:16.733] error: execve(): /d/hpc/home/ta3667/hpc-assignment2/./lenia.out: No such file or directory
+      srun: error: wn101: task 0: Exited with exit code 2

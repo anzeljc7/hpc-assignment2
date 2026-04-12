@@ -20,7 +20,7 @@ make
 # ==========================================
 PROGRAM_NAME="lenia_cpu"          # Ime za datoteke in podmapo
 RUNS=5                            # Število ponovitev za povprečje
-N=256                             # TUKAJ ROČNO SPREMENIŠ VELIKOST (256, 512, 1024, 2048, 4096)
+N=4096                             # TUKAJ ROČNO SPREMENIŠ VELIKOST (256, 512, 1024, 2048, 4096)
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
