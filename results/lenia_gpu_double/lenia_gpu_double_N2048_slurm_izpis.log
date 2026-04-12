@@ -1,5 +1,15 @@
 rm -f lenia.o gifenc.o main.o orbium.o lenia.out
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o lenia.o src/lenia.cu
+src/lenia.cu(211): warning #177-D: variable "buf0_bytes" was declared but never referenced
+      size_t buf0_bytes = (half0 + 2 * r_k) * cols * sizeof(float);
+             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+src/lenia.cu(212): warning #177-D: variable "buf1_bytes" was declared but never referenced
+      size_t buf1_bytes = (half1 + 2 * r_k) * cols * sizeof(float);
+             ^
+
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o gifenc.o src/gifenc.c
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o main.o src/main.c
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
@@ -7,17 +17,17 @@ nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompi
 Začenjam meritve z 1 nitmi...
 Testiram mrežo: 2048x2048
   Zagon 1/5
-    --> Čas:     2.630 s
+    --> Čas:     0.847 s
   Zagon 2/5
-    --> Čas:     2.291 s
+    --> Čas:     0.821 s
   Zagon 3/5
-    --> Čas:     2.333 s
+    --> Čas:     0.838 s
   Zagon 4/5
-    --> Čas:     2.901 s
+    --> Čas:     0.866 s
   Zagon 5/5
-    --> Čas:     2.242 s
+    --> Čas:     0.838 s
   -------------------------------------------------
-  Povprečje za N=2048 =  2.479400 s
+  Povprečje za N=2048 =  0.842000 s
   -------------------------------------------------
 
-Meritve za N=2048 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu/'.
+Meritve za N=2048 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu_double/'.

@@ -8,6 +8,7 @@
 #SBATCH --gpus=1
 #SBATCH --nodes=1
 #SBATCH --output=slurm_temp_%j.log   # Slurm ustvari začasno datoteko z Job ID-jem
+#SBATCH --time=00:05:00
 
 #LOAD MODULES 
 module load CUDA
@@ -19,8 +20,8 @@ make
 # ==========================================
 # NASTAVITVE MERITEV
 # ==========================================
-PROGRAM_NAME="lenia_gpu_square"          # Ime za datoteke in podmapo
-RUNS=5                            # Število ponovitev za povprečje
+PROGRAM_NAME="lenia_gpu_double"          # Ime za datoteke in podmapo
+RUNS=5                             # Število ponovitev za povprečje
 N=2048                             # TUKAJ ROČNO SPREMENIŠ VELIKOST (256, 512, 1024, 2048, 4096)
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK

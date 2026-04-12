@@ -10,7 +10,7 @@
 #include <cuda.h>
 
 // Makro za vklop generiranja animacije
-#define GENERATE_GIF
+// #define GENERATE_GIF
 
 // ====================================================================================
 // KONFIGURACIJA OBLIKE BLOKA

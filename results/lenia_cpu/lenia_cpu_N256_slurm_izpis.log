@@ -7,17 +7,17 @@ nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompi
 Začenjam meritve z 64 nitmi...
 Testiram mrežo: 256x256
   Zagon 1/5
-    --> Čas:     0.210 s
+    --> Čas:     0.025 s
   Zagon 2/5
-    --> Čas:     0.210 s
+    --> Čas:     0.026 s
   Zagon 3/5
-    --> Čas:     0.208 s
+    --> Čas:     0.029 s
   Zagon 4/5
-    --> Čas:     0.623 s
+    --> Čas:     0.030 s
   Zagon 5/5
-    --> Čas:     0.208 s
+    --> Čas:     0.026 s
   -------------------------------------------------
-  Povprečje za N=256  =  0.291800 s
+  Povprečje za N=256  =  0.027200 s
   -------------------------------------------------
 
 Meritve za N=256 so končane! Rezultati te čakajo v mapi 'results/lenia_cpu/'.
