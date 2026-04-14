@@ -5,19 +5,19 @@ nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompi
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall -c -o orbium.o src/orbium.c
 nvcc -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall lenia.o gifenc.o main.o orbium.o -o lenia.out -lm
 Začenjam meritve z 1 nitmi...
-Testiram mrežo: 512x512
+Testiram mrežo: 4096x4096
   Zagon 1/5
-    --> Čas:     0.160 s
+    --> Čas:     1.580 s
   Zagon 2/5
-    --> Čas:     0.163 s
+    --> Čas:     1.542 s
   Zagon 3/5
-    --> Čas:     0.166 s
+    --> Čas:     1.525 s
   Zagon 4/5
-    --> Čas:     0.167 s
+    --> Čas:     1.543 s
   Zagon 5/5
-    --> Čas:     0.163 s
+    --> Čas:     1.536 s
   -------------------------------------------------
-  Povprečje za N=512  =  0.163800 s
+  Povprečje za N=4096 =  1.545200 s
   -------------------------------------------------
 
-Meritve za N=512 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu_shared_square_1/'.
+Meritve za N=4096 so končane! Rezultati te čakajo v mapi 'results/lenia_gpu_basic_block_4_256/'.
