@@ -21,8 +21,8 @@ make
 # NASTAVITVE MERITEV
 # ==========================================
 PROGRAM_NAME="lenia_gpu_shared_block_4_256"          # Ime za datoteke in podmapo
-RUNS=5                             # Število ponovitev za povprečje
-N=1024                             # TUKAJ ROČNO SPREMENIŠ VELIKOST (256, 512, 1024, 2048, 4096)
+RUNS=5                            # Število ponovitev za povprečje
+N=2048                             # TUKAJ ROČNO SPREMENIŠ VELIKOST (256, 512, 1024, 2048, 4096)
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 

@@ -5,34 +5,23 @@
 #include "orbium.h"
 #include "gifenc.h"
 
-// CUDA knjižnice
 #include <cuda_runtime.h>
 #include <cuda.h>
 
-// Makro za vklop generiranja animacije
-// Za meritve hitrosti mora biti zakomentirano, ker cudaMemcpy vsak korak
-// drastično upočasni simulacijo (prenos GPU -> CPU čez PCIe vodilo)
-#define GENERATE_GIF
+// #define GENERATE_GIF
 
-// ====================================================================================
-// KONFIGURACIJA OBLIKE BLOKA
-// 0 = KVADRATI (32 x 32) -> Optimalno za vse velikosti (256, 512, 1024, 2048, 4096)
-//     ker so vse potence dvojke deljive z 32 -> nič idle niti
-//     + najmanjše razmerje obseg/površina -> najmanj redundantnih branj
-//     + memory coalescing (warp bere zaporedne naslove)
-// 1 = VODORAVNI PASOVI (256 x 1) -> slabše (~9x več redundantnih branj)
-// 2 = NAVPIČNI PASOVI (1 x 256)  -> najslabše (+ brez memory coalescinga)
-// ====================================================================================
+// KONFIGURACIJA OBLIKE BLOKA (NITI)
+// 0 = KVADRATI (32 x 32) -> Optimalno za dimenzije
+// 1 = VODORAVNI PASOVI (256 x 4)
+// 2 = NAVPIČNI PASOVI (1024 x 1)
 #define BLOCK_CONFIG 1
 
-// -------------------------------------------------------------------------
 // 1. CUDA DEVICE FUNKCIJE (Matematika, ki se izvaja neposredno na GPU)
-//    __device__ pomeni: kliče jih GPU nit, CPU jih ne more klicati
-// -------------------------------------------------------------------------
+//    __device__: Te funkcije lahko kliče samo GPU. CPU do njih nima dostopa.
 __device__ float gauss_dev(float x, float mu, float sigma)
 {
     float diff = (x - mu) / sigma;
-    return expf(-0.5f * (diff * diff)); // expf() je hitrejša float različica exp()
+    return expf(-0.5f * (diff * diff)); // expf() je optimizirana različica za float
 }
 
 __device__ float growth_lenia_dev(float u)
@@ -42,61 +31,49 @@ __device__ float growth_lenia_dev(float u)
     return -1.0f + 2.0f * gauss_dev(u, mu, sigma);
 }
 
-// -------------------------------------------------------------------------
-// 2. CUDA KERNEL Z SHARED MEMORY
-//    __global__ pomeni: sproži ga CPU, izvaja pa GPU
-//    Vsaka nit izračuna točno eno celico mreže
-//
-//    Optimizacija z Shared Memory (po vzoru heat.cu):
-//    - Vsak blok niti naloži svoj "tile" podatkov v shared memory
-//    - Tile vključuje dejanske celice bloka + halo rob debeline r_k
-//    - Shared memory je ~100x hitrejša od globalnega pomnilnika (VRAM)
-//    - Brez shared memory bi vsaka nit brala iste sosede neodvisno
-//      iz počasnega globalnega pomnilnika
-// -------------------------------------------------------------------------
+// 2. CUDA KERNEL Z DELJENIM POMNILNIKOM (SHARED MEMORY)
+//    __global__: Funkcijo sproži CPU, izvaja pa se vzporedno na GPU.
+//    Vsaka nit (thread) izračuna vrednost točno ene celice v mreži.
 __global__ void evolve_lenia_kernel(const float *world, float *next_world, const float *w,
                                     int rows, int cols, int kernel_size, float dt)
 {
     // -----------------------------------------------------------------------
-    // SHARED MEMORY — deklaracija tile-a (dinamična velikost, podana ob klicu)
-    // Velikost: (blockDim.x + 2*r_k) * (blockDim.y + 2*r_k) floatov
-    // Za 32x32 blok in kernel_size=27 (r_k=13):
-    //   tile = (32+26) * (32+26) * 4B = 58 * 58 * 4B ≈ 13KB  (vejde v 48KB limit)
+    // DELJENI POMNILNIK (SHARED MEMORY) — Deklaracija bloka podatkov (tile)
+    // Dinamična velikost je določena ob klicu kernela.
+    // Vsak blok niti naloži svoj del mreže (tile) + potreben zunanji rob (halo/ghost cells).
+    // Deljeni pomnilnik je na samem čipu (L1 cache nivo) in je ~100x hitrejši od VRAM-a.
     // -----------------------------------------------------------------------
     extern __shared__ float tile[];
 
     int r_k = kernel_size / 2;
 
-    // Dimenzije tile-a (dejanski blok + halo na obeh straneh)
+    // Dimenzije tile-a (velikost bloka niti + debelina roba r_k na vseh 4 straneh)
     int tileWidth = blockDim.x + 2 * r_k;
     int tileHeight = blockDim.y + 2 * r_k;
 
-    // Globalni indeksi te niti (katera celica v mreži)
-    int gj = blockIdx.x * blockDim.x + threadIdx.x; // stolpec
-    int gi = blockIdx.y * blockDim.y + threadIdx.y; // vrstica
+    // Globalne koordinate te niti v celotni mreži
+    int gj = blockIdx.x * blockDim.x + threadIdx.x; // Stolpec
+    int gi = blockIdx.y * blockDim.y + threadIdx.y; // Vrstica
 
-    // Lokalni indeksi v tile-u (z offsetom r_k za halo, kot heat.cu uporablja +1)
+    // Lokalne koordinate te niti znotraj tile-a (premaknjene za debelino roba r_k)
     int tx = threadIdx.x + r_k;
     int ty = threadIdx.y + r_k;
 
     // -----------------------------------------------------------------------
-    // NALAGANJE TILE + HALO IZ GLOBALNEGA POMNILNIKA V SHARED MEMORY
-    //
-    // V heat.cu je bil halo debeline 1, zato so zadoščali if stavki za 4 robove.
-    // V Lenia je halo debeline r_k=13, zato potrebujemo zanko — vsaka nit
-    // naloži več elementov (tile je bistveno večji od samega bloka).
-    //
-    // Vsaka nit v zanki pokrije del tile-a s korakom blockDim.x/y
+    // SKUPINSKO NALAGANJE PODATKOV IZ GLOBALNEGA V DELJENI POMNILNIK
+    // Ker je tile (blok + rob) večji od števila niti v bloku, mora vsaka nit
+    // naložiti več kot le en element. S spodnjo zanko niti sodelujejo pri
+    // prenosu celotnega območja.
     // -----------------------------------------------------------------------
     for (int dy = threadIdx.y; dy < tileHeight; dy += blockDim.y)
     {
         for (int dx = threadIdx.x; dx < tileWidth; dx += blockDim.x)
         {
-            // Globalni koordinati tega elementa tile-a
+            // Izračun globalnih koordinat za branje
             int src_i = (int)(blockIdx.y * blockDim.y) + dy - r_k;
             int src_j = (int)(blockIdx.x * blockDim.x) + dx - r_k;
 
-            // Toroidalni wrap — brez modula % (if/else je hitrejši)
+            // Toroidalni svet (periodični robovi) - uporaba hitrih 'if' stavkov namesto '%'
             if (src_i < 0)
                 src_i += rows;
             else if (src_i >= rows)
@@ -106,46 +83,40 @@ __global__ void evolve_lenia_kernel(const float *world, float *next_world, const
             else if (src_j >= cols)
                 src_j -= cols;
 
-            // Naložimo vrednost iz globalnega pomnilnika v shared memory
+            // Zapis v hitri deljeni pomnilnik
             tile[dy * tileWidth + dx] = world[src_i * cols + src_j];
         }
     }
 
     // -----------------------------------------------------------------------
-    // SINHRONIZACIJA — počakamo da VSE niti v bloku dokončajo nalaganje
-    // Brez tega bi nekatere niti začele računati preden so sosednje niti
-    // naložile halo (race condition)
-    // Enako kot v heat.cu: __syncthreads()
+    // SINHRONIZACIJA NITI
+    // Nujno! Počakamo, da so VSE niti v bloku zaključile s prenosom podatkov.
+    // Brez tega bi nekatere niti začele računati konvolucijo z neobstoječimi podatki.
     // -----------------------------------------------------------------------
     __syncthreads();
 
     // -----------------------------------------------------------------------
-    // KONVOLUCIJA — beremo iz TILE (shared memory) namesto world (globalni)
-    //
-    // tx, ty že vključujeta r_k offset, zato:
-    //   tile[ty + kri - r_k][tx + kcj - r_k] = tile[threadIdx.y + kri][threadIdx.x + kcj]
+    // KONVOLUCIJA (Izračun na podlagi hitrega deljenega pomnilnika)
     // -----------------------------------------------------------------------
     if (gi < rows && gj < cols)
     {
         float sum = 0.0f;
 
-        // Zrcaljena konvolucija (kernel flip)
+        // Zrcaljena konvolucija po definiciji
         for (int ki = kernel_size - 1, kri = 0; ki >= 0; ki--, kri++)
         {
             for (int kj = kernel_size - 1, kcj = 0; kj >= 0; kj--, kcj++)
             {
-                // Koordinate v tile-u — ty/tx že vsebujeta r_k offset
-                int tile_i = ty - r_k + kri; // = threadIdx.y + kri
-                int tile_j = tx - r_k + kcj; // = threadIdx.x + kcj
+                // Lokalne koordinate znotraj tile-a
+                int tile_i = ty - r_k + kri;
+                int tile_j = tx - r_k + kcj;
 
-                // Beremo iz shared memory (hitro!) namesto iz globalnega (počasno)
+                // Branje je izjemno hitro, ker beremo iz spremenljivke 'tile'
                 sum += w[ki * kernel_size + kj] * tile[tile_i * tileWidth + tile_j];
             }
         }
 
-        // Loop Fusion: growth + clamp + zapis v enem prehodu
-
-        // Optimizacija: preskočimo Gauss izračun pri mrtvih celicah (sum ≈ 0)
+        // Hitri preskok za prazna območja (mrtve celice)
         float res;
         if (sum < 1e-6f)
         {
@@ -156,7 +127,7 @@ __global__ void evolve_lenia_kernel(const float *world, float *next_world, const
             res = world[gi * cols + gj] + dt * growth_lenia_dev(sum);
         }
 
-        // Clamp na [0, 1] z if/else namesto fminf/fmaxf
+        // Omejitev vrednosti (Clamp) med 0.0 in 1.0
         if (res > 1.0f)
             res = 1.0f;
         else if (res < 0.0f)
@@ -167,7 +138,7 @@ __global__ void evolve_lenia_kernel(const float *world, float *next_world, const
 }
 
 // -------------------------------------------------------------------------
-// 3. GENERIRANJE JEDRA NA CPE (nespremenjeno)
+// 3. GENERIRANJE JEDRA NA CPE (Priprava na procesorju)
 // -------------------------------------------------------------------------
 float *generate_kernel(float *K, const unsigned int size)
 {
@@ -190,14 +161,13 @@ float *generate_kernel(float *K, const unsigned int size)
             sum += K[(y + r) * size + x + r];
         }
     }
-    // Normalizacija jedra
     for (unsigned int i = 0; i < size * size; i++)
         K[i] /= sum;
     return K;
 }
 
 // -------------------------------------------------------------------------
-// 4. GLAVNA FUNKCIJA (Host Code)
+// 4. GLAVNA FUNKCIJA (Host Code - Vodi jo CPU)
 // -------------------------------------------------------------------------
 float *evolve_lenia(const unsigned int rows, const unsigned int cols, const unsigned int steps,
                     const float dt, const unsigned int kernel_size,
@@ -208,14 +178,13 @@ float *evolve_lenia(const unsigned int rows, const unsigned int cols, const unsi
 #endif
 
     // =========================================================================
-    // PRIPRAVA ZAČETNEGA STANJA NA CPU
+    // PRIPRAVA ZAČETNEGA STANJA NA CPU (Host)
     // =========================================================================
     float *w = (float *)malloc(kernel_size * kernel_size * sizeof(float));
     float *world = (float *)calloc(rows * cols, sizeof(float));
 
     generate_kernel(w, kernel_size);
 
-    // Inicializacija orbiumov (place_orbium uporablja double, zato vmesna tabela)
     double *d_world_cpu = (double *)calloc(rows * cols, sizeof(double));
     for (unsigned int o = 0; o < num_orbiums; o++)
     {
@@ -227,10 +196,8 @@ float *evolve_lenia(const unsigned int rows, const unsigned int cols, const unsi
     free(d_world_cpu);
 
     // =========================================================================
-    // CUDA ALOKACIJA IN PRENOS — HOST -> DEVICE
-    // Prenosi se zgodijo samo ENKRAT pred zanko (ne znotraj nje)
-    // ①  w      (kernel jedro)    CPU -> GPU
-    // ②  world  (začetno stanje)  CPU -> GPU
+    // CUDA ALOKACIJA IN PRENOS (CPU -> GPU)
+    // Izvede se samo enkrat pred zanko! Komunikacija čez PCIe vodilo je počasna.
     // =========================================================================
     float *d_w, *d_world, *d_next_world;
     size_t world_bytes = rows * cols * sizeof(float);
@@ -240,58 +207,47 @@ float *evolve_lenia(const unsigned int rows, const unsigned int cols, const unsi
     cudaMalloc((void **)&d_world, world_bytes);
     cudaMalloc((void **)&d_next_world, world_bytes);
 
-    cudaMemcpy(d_w, w, w_bytes, cudaMemcpyHostToDevice);             // ①
-    cudaMemcpy(d_world, world, world_bytes, cudaMemcpyHostToDevice); // ②
+    cudaMemcpy(d_w, w, w_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_world, world, world_bytes, cudaMemcpyHostToDevice);
 
     // =========================================================================
-    // NASTAVITEV OBLIKE BLOKOV
-    // Za vse naše velikosti (256, 512, 1024, 2048, 4096) je 32x32 optimalen:
-    // - So potence dvojke → deljive z 32 → 0 idle niti
-    // - Kvadrat minimizira obseg/površina razmerje → ~3.28x redundantnih branj
-    //   (vs ~29.7x pri pasovih)
-    // - Memory coalescing: warp (32 niti) bere zaporedne naslove
+    // NASTAVITEV MREŽE IN BLOKOV ZA GPU
     // =========================================================================
     dim3 threadsPerBlock;
     if (BLOCK_CONFIG == 0)
-        threadsPerBlock = dim3(32, 32); // Kvadrat — optimalno
+        threadsPerBlock = dim3(32, 32); // Kvadrat — optimalno za grafične kartice
     else if (BLOCK_CONFIG == 1)
         threadsPerBlock = dim3(256, 4); // Vodoravni pas
     else
-        threadsPerBlock = dim3(1, 256); // Navpični pas
+        threadsPerBlock = dim3(1024, 1); // Navpični pas
 
-    // Izračun mreže blokov (zaokrožimo navzgor za robne primere)
     dim3 numBlocks((cols + threadsPerBlock.x - 1) / threadsPerBlock.x,
                    (rows + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
     // =========================================================================
-    // IZRAČUN VELIKOSTI SHARED MEMORY (kot localMemSize v heat.cu)
-    // tile = (blockDim.x + 2*r_k) * (blockDim.y + 2*r_k) * sizeof(float)
-    // Za 32x32 blok, kernel_size=27, r_k=13:
-    //   tile = 58 * 58 * 4B = 13.456B ≈ 13KB  (limit je 48KB na blok)
+    // IZRAČUN VELIKOSTI DELJENEGA POMNILNIKA (Shared Memory)
+    // Formula: (širina bloka + 2*rob) * (višina bloka + 2*rob) * velikost_tipa
     // =========================================================================
     int r_k = kernel_size / 2;
     int localMemSize = (threadsPerBlock.x + 2 * r_k) *
                        (threadsPerBlock.y + 2 * r_k) * sizeof(float);
 
     // =========================================================================
-    // GLAVNA ZANKA SIMULACIJE — teče v celoti na GPU
-    // Nobenih prenosov CPU<->GPU znotraj zanke (razen opcijskega GIF-a)
+    // GLAVNA ZANKA SIMULACIJE (Izvaja se izključno na GPU)
     // =========================================================================
     for (unsigned int step = 0; step < steps; step++)
     {
-        // Zagon kernela z dodatnim parametrom za shared memory
-        // (kot v heat.cu: heatStep<<<grid, block, localMemSize>>>)
+        // Klic kernela: določimo mrežo blokov, velikost bloka in velikost deljenega pomnilnika
         evolve_lenia_kernel<<<numBlocks, threadsPerBlock, localMemSize>>>(
             d_world, d_next_world, d_w, rows, cols, kernel_size, dt);
 
-        // Pointer swap — zamenjamo naslova brez kopiranja podatkov
+        // Zamenjava kazalcev na GPU (O(1) operacija)
         float *d_temp = d_world;
         d_world = d_next_world;
         d_next_world = d_temp;
 
 #ifdef GENERATE_GIF
-        // POZOR: Ta prenos se ne šteje v čas meritev, a vseeno upočasni simulacijo
-        // GPU -> CPU prenos čez PCIe vodilo vsak korak
+        // Prenos stanja z GPU na CPU za shranjevanje okvirja
         cudaMemcpy(world, d_world, world_bytes, cudaMemcpyDeviceToHost);
         for (unsigned int i = 0; i < rows; i++)
             for (unsigned int j = 0; j < cols; j++)
@@ -304,8 +260,8 @@ float *evolve_lenia(const unsigned int rows, const unsigned int cols, const unsi
     ge_close_gif(gif);
 #endif
 
-    // ③ Prenos končnega rezultata — DEVICE -> HOST (enkrat, po zanki)
-    cudaMemcpy(world, d_world, world_bytes, cudaMemcpyDeviceToHost); // ③
+    // Prenos končnega rezultata nazaj na CPU
+    cudaMemcpy(world, d_world, world_bytes, cudaMemcpyDeviceToHost);
 
     // Čiščenje GPU pomnilnika
     cudaFree(d_w);
